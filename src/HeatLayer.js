@@ -1,6 +1,7 @@
 'use strict';
 
 L.HeatLayer = (L.Layer ? L.Layer : L.Class).extend({
+//L.HeatLayer = L.Path.extend({
 
     // options: {
     //     minOpacity: 0.05,
@@ -12,7 +13,18 @@ L.HeatLayer = (L.Layer ? L.Layer : L.Class).extend({
 
     initialize: function (latlngs, options) {
         this._latlngs = latlngs;
+        this._map = options.map;
         L.setOptions(this, options);
+        this._pane = this.options.pane ? this.options.pane:"overlayPane";
+        if (!this._canvas) {
+            this._initCanvas();
+        }
+    },
+
+    // @method getLatLng: LatLng
+    // Returns the current geographical position of the marker.
+    getLatLng: function () {
+        return this._latlngs;
     },
 
     setLatLngs: function (latlngs) {
@@ -33,8 +45,14 @@ L.HeatLayer = (L.Layer ? L.Layer : L.Class).extend({
         return this.redraw();
     },
 
+    setStyle: function (options) {
+        L.setOptions(this, options);
+        
+        this._pane = this.options.pane ? this.options.pane:this._pane
+    },
+
     redraw: function () {
-        if (this._heat && !this._frame && this._map && !this._map._animating) {
+        if (this._heat && !this._frame && !this._map._animating) {
             this._frame = L.Util.requestAnimFrame(this._redraw, this);
         }
         return this;
@@ -47,11 +65,15 @@ L.HeatLayer = (L.Layer ? L.Layer : L.Class).extend({
             this._initCanvas();
         }
 
-        if (this.options.pane) {
-            this.getPane().appendChild(this._canvas);
-        }else{
-            map._panes.overlayPane.appendChild(this._canvas);
+        //this._pane = this.options.pane ? this.options.pane:"overlayPane"
+        
+        // Pane does not exist default to overlay pane
+        if(!map._panes[this._pane]) { 
+            console.warn("Attempting to add to nonexistant pane " + this.options.pane + " - defaulting to overlayPane")
+            this._pane = "overlayPane"
         }
+
+        map._panes[this._pane].appendChild(this._canvas);
 
         map.on('moveend', this._reset, this);
 
@@ -63,11 +85,8 @@ L.HeatLayer = (L.Layer ? L.Layer : L.Class).extend({
     },
 
     onRemove: function (map) {
-        if (this.options.pane) {
-            this.getPane().removeChild(this._canvas);
-        }else{
-            map.getPanes().overlayPane.removeChild(this._canvas);
-        }
+        //map.getPanes().overlayPane.removeChild(this._canvas);
+        map.getPanes()[this._pane].removeChild(this._canvas);
 
         map.off('moveend', this._reset, this);
 
@@ -104,9 +123,7 @@ L.HeatLayer = (L.Layer ? L.Layer : L.Class).extend({
         if (this.options.gradient) {
             this._heat.gradient(this.options.gradient);
         }
-        if (this.options.max) {
-            this._heat.max(this.options.max);
-        }
+        this._max = 1;
     },
 
     _reset: function () {
@@ -126,9 +143,6 @@ L.HeatLayer = (L.Layer ? L.Layer : L.Class).extend({
     },
 
     _redraw: function () {
-        if (!this._map) {
-            return;
-        }
         var data = [],
             r = this._heat._r,
             size = this._map.getSize(),
@@ -136,7 +150,8 @@ L.HeatLayer = (L.Layer ? L.Layer : L.Class).extend({
                 L.point([-r, -r]),
                 size.add([r, r])),
 
-            max = this.options.max === undefined ? 1 : this.options.max,
+            //max = this.options.max === undefined ? 1 : this.options.max,
+            max = 1,
             maxZoom = this.options.maxZoom === undefined ? this._map.getMaxZoom() : this.options.maxZoom,
             v = 1 / Math.pow(2, Math.max(0, Math.min(maxZoom - this._map.getZoom(), 12))),
             cellSize = r / 2,
@@ -156,7 +171,7 @@ L.HeatLayer = (L.Layer ? L.Layer : L.Class).extend({
                 var alt =
                     this._latlngs[i].alt !== undefined ? this._latlngs[i].alt :
                     this._latlngs[i][2] !== undefined ? +this._latlngs[i][2] : 1;
-                k = alt * v;
+                k = alt; 
 
                 grid[y] = grid[y] || [];
                 cell = grid[y][x];
